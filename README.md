@@ -38,7 +38,14 @@ func listBucket(accessKeyID, secretAccessKey, bucket string) {
 }
 ```
 
+The above example can be found in [examples/s3ls](examples/s3ls).
+
+For a working example of storing your secret access key in your TPM, see [examples/tpmsigner](examples/tpmsigner).
 
 ## Copyright
 
 Code in internal/awssign is derived from https://github.com/aws/aws-sdk-go. Copyright for that code can be found in NOTICE.txt.
+
+## Credits
+
+This work was inspired by the demo @salrashid123's demo in https://github.com/salrashid123/aws_hmac.
