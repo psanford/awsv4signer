@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"hash"
@@ -123,15 +124,15 @@ func storeKey() error {
 	if err != nil {
 		return fmt.Errorf("CreateKeyWithSensitive err: %w", err)
 	}
-	newHandle, _, err := tpm2.Load(rwc, pkh, emptyPassword, pubArea, privInternal)
-	if err != nil {
-		return fmt.Errorf("load hash key err: %w", err)
-	}
-	defer tpm2.FlushContext(rwc, newHandle)
 
-	ekhBytes, err := tpm2.ContextSave(rwc, newHandle)
+	k := keyHandle{
+		Pub:  pubArea,
+		Priv: privInternal,
+	}
+
+	ekhBytes, err := json.Marshal(k)
 	if err != nil {
-		return fmt.Errorf("ContextSave err: %w", err)
+		return fmt.Errorf("marshal wrapped key err: %s", err)
 	}
 
 	err = ioutil.WriteFile(*hmacKeyHandle, ekhBytes, 0600)
@@ -168,9 +169,21 @@ func listBucket() error {
 		}
 	}
 
-	hmacHandle, err := tpm2.ContextLoad(rwc, ekhBytes)
+	var k keyHandle
+	err = json.Unmarshal(ekhBytes, &k)
 	if err != nil {
-		return fmt.Errorf("context load err: %w", err)
+		return fmt.Errorf("unmarshal hmac-handle err: %w", err)
+	}
+
+	pkh, _, err := tpm2.CreatePrimary(rwc, tpm2.HandleOwner, tpm2.PCRSelection{}, emptyPassword, emptyPassword, primaryKeyParams)
+	if err != nil {
+		return fmt.Errorf("CreatePrimary err: %w", err)
+	}
+	defer tpm2.FlushContext(rwc, pkh)
+
+	hmacHandle, _, err := tpm2.Load(rwc, pkh, emptyPassword, k.Pub, k.Priv)
+	if err != nil {
+		return fmt.Errorf("load hash key err: %w", err)
 	}
 
 	tpm := tpm{
@@ -359,4 +372,9 @@ func decodeResponse(code tpmutil.ResponseCode) error {
 	}
 	// Code in 0:5, Session in 8:10
 	return tpm2.SessionError{Code: tpm2.RCFmt1(code & 0x3f), Session: tpm2.RCIndex((code & 0x700) >> 8)}
+}
+
+type keyHandle struct {
+	Pub  []byte `json:"pub"`
+	Priv []byte `json:"priv"`
 }
